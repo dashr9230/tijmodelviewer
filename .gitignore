@@ -1,0 +1,6 @@
+# build files
+Debug
+Release
+
+# VS files
+.vs
