@@ -4,17 +4,15 @@
 #define PSGLOBAL(var) (((psGlobalType *)(RsGlobal.ps))->var)
 
 typedef char RwChar;
-typedef signed char RwInt8;
 typedef unsigned char RwUInt8;
-typedef short RwInt16;
-typedef unsigned short RwUInt16;
-typedef long RwFixed;
 typedef int RwInt32;
-typedef unsigned int RwUInt32;
 typedef RwInt32 RwBool;
 typedef float RwReal;
-typedef __int64 RwInt64;
-typedef unsigned __int64 RwUInt64;
+
+enum RsEventStatus;
+enum RsEvent;
+
+typedef RsEventStatus (*RsInputEventHandler)(RsEvent event, void *param);
 
 enum RsEvent
 {
@@ -28,7 +26,7 @@ enum RsEvent
     rsRWINITIALIZE = 12,
     rsRWTERMINATE,
     rsSELECTDEVICE,
-	rsINITIALIZE = 15,
+    rsINITIALIZE,
     rsTERMINATE,
     rsIDLE,
     rsQUITAPP = 20,
@@ -53,14 +51,21 @@ enum RsInputDeviceType
 };
 typedef enum RsInputDeviceType RsInputDeviceType;
 
-typedef RsEventStatus (*RsInputEventHandler)(RsEvent event, void *param);
-
 struct RwV2d
 {
     RwReal x;
     RwReal y;
 };
 typedef struct RwV2d RwV2d;
+
+struct RwRect
+{
+    RwInt32 x;
+    RwInt32 y;
+    RwInt32 w;
+    RwInt32 h;
+};
+typedef struct RwRect RwRect;
 
 struct RwRGBA
 {
@@ -81,12 +86,12 @@ typedef struct RsInputDevice RsInputDevice;
 
 struct RsGlobalType
 {
-    const RwChar *appName;
+    const RwChar* appName;
     RwInt32 maximumWidth;
     RwInt32 maximumHeight;
     RwBool  quit;
 
-    void   *ps; /* platform specific data */
+    void* ps;
 
     RsInputDevice keyboard;
     RsInputDevice mouse;
@@ -117,28 +122,52 @@ struct RpWorld
 };
 typedef struct RpWorld RpWorld;
 
+struct RwCamera
+{
+    // TODO: RwCamera
+};
+typedef struct RwCamera RwCamera;
+
 struct RpLight
 {
     // TODO: RpLight
 };
-
 typedef struct RpLight RpLight;
 
+RwBool Initialize3D(void *param);
+RsEventStatus KeyboardHandler(RsEvent event, void *param);
+RsEventStatus MouseHandler(RsEvent event, void *param);
+RwBool AttachInputDevices(void);
+void Idle();
+void Terminate3D();
+
 RsEventStatus RsEventHandler(RsEvent event, void *param);
+
 BOOL InitApplication(HANDLE instance);
 HWND InitInstance(HANDLE instance);
+RwBool RsInputDeviceAttach(RsInputDeviceType inputDevice, RsInputEventHandler inputEventHandler);
 RwBool RsAlwaysOnTop(RwBool alwaysOnTop);
 void RsMouseSetPos(RwV2d *pos);
-RwBool AttachInputDevices(void);
-RwBool RsInputDeviceAttach(RsInputDeviceType inputDevice, RsInputEventHandler inputEventHandler);
-void RsMouseSetVisibility(RwBool visible);
-RwBool Initialize3D(void *param);
-void Terminate3D();
+
 RwBool RsRwInitialize(void *displayID);
 void RsRwTerminate();
+
 RtCharset *RtCharsetCreate(const RwRGBA * foreGround, const RwRGBA * backGround);
 RwBool RwRasterDestroy(RwRaster* raster);
-RpWorld* LoadWorld(RwChar* bspFile);
+
+RwCamera* RwCameraClear(RwCamera* camera, RwRGBA* colour, RwInt32 clearMode);
+void RsCameraShowRaster(RwCamera* camera);
+RpWorld *RpWorldAddCamera(RpWorld *world, RwCamera *camera);
+RpWorld *RpWorldRemoveCamera(RpWorld *world, RwCamera *camera);
+RpWorld* RpWorldRender(RpWorld* world);
+RwCamera* RwCameraBeginUpdate(RwCamera* camera);
+RwCamera* RwCameraEndUpdate(RwCamera* camera);
+
+RwCamera* CreateCamera();
+void CameraDestroy(RwCamera* camera);
+
 RpLight* CreateLight(RpWorld* world);
 void RemoveLight(RpLight* light);
-RwUInt32 RsTimer(void);
+
+RpWorld* LoadWorld(RwChar* bspFile);
+

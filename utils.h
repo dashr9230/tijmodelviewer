@@ -1,7 +1,6 @@
 
 #pragma once
 
-#define DEBUG_TRACE(x) DebugLog(x)
-
 void InstallCallHook(DWORD dwAddress, DWORD dwFunction);
-void DebugLog(const char* format, ...);
+void NOP(DWORD dwAddress, DWORD dwSize);
+void Log(const char* format, ...);
