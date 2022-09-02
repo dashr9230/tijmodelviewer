@@ -76,11 +76,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="input.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="rwcore.cpp" />
     <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="input.h" />
+    <ClInclude Include="main.h" />
     <ClInclude Include="rwcore.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>

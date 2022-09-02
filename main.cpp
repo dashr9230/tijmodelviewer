@@ -1,18 +1,18 @@
 
-#define WIN32_LEAN_AND_MEAN
-#define _CRT_SECURE_NO_WARNINGS
-#include <Windows.h>
-
-#include "rwcore.h"
-#include "utils.h"
+#include "main.h"
 
 RsGlobalType& RsGlobal = *(RsGlobalType*)0x004EE9E0;
 RwBool& RwInitialized = *(RwBool*)0x004E7138;
 RwBool& ForegroundApp = *(RwBool*)0x004DB4B4;
 
+int* KeyTableEnglish = (int*)0x004BC440;
+
+RwBool* validDelta = (RwBool*)0x004E7160;
+
 LRESULT CALLBACK MainWndProc(HWND window,
 	UINT message, WPARAM wParam, LPARAM lParam)
 {
+	POINTS points;
 	static BOOL noMemory = FALSE;
 
 	switch (message)
@@ -68,7 +68,7 @@ LRESULT CALLBACK MainWndProc(HWND window,
 
 #ifdef RWMOUSE
             ClipMouseToWindow(window);
-#endif  /* RWMOUSE */
+#endif
 
             if (RwInitialized && r.h > 0 && r.w > 0)
             {
@@ -78,13 +78,10 @@ LRESULT CALLBACK MainWndProc(HWND window,
                 {
                     WINDOWPLACEMENT     wp;
 
-                    /* failed to create window of required size */
                     noMemory = TRUE;
 
-                    /* stop re-sizing */
                     ReleaseCapture();
 
-                    /* handle maximised window */
                     GetWindowPlacement(window, &wp);
                     if (wp.showCmd == SW_SHOWMAXIMIZED)
                     {
@@ -103,21 +100,14 @@ LRESULT CALLBACK MainWndProc(HWND window,
 
         case WM_SIZING:
         {
-            /* 
-             * Handle event to ensure window contents are displayed during re-size
-             * as this can be disabled by the user, then if there is not enough 
-             * memory things don't work.
-             */
             RECT               *newPos = (LPRECT) lParam;
             RECT                rect;
 
-            /* redraw window */
             if (RwInitialized)
             {
                 RsEventHandler(rsIDLE, NULL);
             }
 
-            /* Manually resize window */
             rect.left = rect.top = 0;
             rect.bottom = newPos->bottom - newPos->top;
             rect.right = newPos->right - newPos->left;
@@ -128,6 +118,119 @@ LRESULT CALLBACK MainWndProc(HWND window,
 
             return 0L;
         }
+
+		case WM_KEYDOWN:
+		{
+			RsKeyStatus ks;
+
+			if (!(lParam & 0x40000000))
+			{
+				ks.keyScanCode = winTranslateKey(wParam, lParam);
+				ks.keyCharCode = KeyTableEnglish[ks.keyScanCode];
+				RsKeyboardEventHandler(rsKEYDOWN, &ks);
+
+				if (ks.keyCharCode == rsESC)
+				{
+					RsEventHandler(rsQUITAPP, NULL);
+				}
+			}
+
+			return 0L;
+		}
+
+		case WM_KEYUP:
+		{
+			RsKeyStatus ks;
+
+			ks.keyScanCode = winTranslateKey(wParam, lParam);
+			ks.keyCharCode = KeyTableEnglish[ks.keyScanCode];
+
+			RsKeyboardEventHandler(rsKEYUP, &ks);
+
+			return 0L;
+		}
+
+		case WM_SYSKEYDOWN:
+		{
+			RsKeyStatus ks;
+
+			if (!(lParam & 0x40000000))
+			{
+				ks.keyScanCode = winTranslateKey(wParam, lParam);
+				ks.keyCharCode = KeyTableEnglish[ks.keyScanCode];
+
+				RsKeyboardEventHandler(rsKEYDOWN, &ks);
+			}
+
+			return 0L;
+		}
+
+		case WM_SYSKEYUP:
+		{
+			RsKeyStatus ks;
+
+			ks.keyScanCode = winTranslateKey(wParam, lParam);
+			ks.keyCharCode = KeyTableEnglish[ks.keyScanCode];
+
+			RsKeyboardEventHandler(rsKEYUP, &ks);
+
+			return 0L;
+		}
+
+		case WM_MOUSEMOVE:
+		{
+			if (ForegroundApp)
+			{
+				points = MAKEPOINTS(lParam);
+
+				if (*validDelta)
+				{
+					RsMouseStatus ms;
+
+					ms.delta.x = points.x - PSGLOBAL(lastMousePos).x;
+					ms.delta.y = points.y - PSGLOBAL(lastMousePos).y;
+					ms.pos.x = points.x;
+					ms.pos.y = points.y;
+
+					RsMouseEventHandler(rsMOUSEMOVE, &ms);
+				}
+				else
+				{
+					*validDelta = TRUE;
+				}
+
+				PSGLOBAL(lastMousePos).x = points.x;
+				PSGLOBAL(lastMousePos).y = points.y;
+			}
+
+			return 0L;
+		}
+
+		case WM_LBUTTONDOWN:
+		{
+			RsMouseStatus ms;
+
+			points = MAKEPOINTS(lParam);
+			ms.pos.x = points.x;
+			ms.pos.y = points.y;
+			ms.shift = (wParam & MK_SHIFT) ? TRUE : FALSE;
+			ms.control = (wParam & MK_CONTROL) ? TRUE : FALSE;
+
+			SetCapture(window);
+
+			RsMouseEventHandler(rsLEFTBUTTONDOWN, &ms);
+
+			return 0L;
+		}
+
+		case WM_LBUTTONUP:
+		{
+			ReleaseCapture();
+
+			RsMouseEventHandler(rsLEFTBUTTONUP, NULL);
+
+			return 0L;
+		}
 	}
 
 	return DefWindowProc(window, message, wParam, lParam);

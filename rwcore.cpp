@@ -1,18 +1,105 @@
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include "main.h"
 
-#include "rwcore.h"
-#include "utils.h"
+#define MAXCAMERASPEED 200.0f
+#define MAXCAMERAROTSPEED 120.0f
+
+#define CAMERASPEED (0.5f*MAXCAMERASPEED)
+#define CAMERAROTSCL  (0.1f*MAXCAMERAROTSPEED)
 
 RwRGBA ForegroundColor = { 200, 200, 200, 255 };
 RwRGBA BackgroundColor = { 64,  64,  64,   0 };
+
+float* FarClipPlane = (float*)0x004CF4DC;
 
 RtCharset** Charset = (RtCharset**)0x004E5BF0;
 RwCamera** Camera = (RwCamera**)0x00504520;
 RpWorld** World = (RpWorld**)0x00504058;
 RpLight** MainLight = (RpLight**)0x00504054;
 RpLight** AmbientLight = (RpLight**)0x00504050;
+
+RwInt32 FrameCounter = 0;
+RwInt32 FramesPerSecond = 0;
+
+RwBool Forwards = FALSE;
+RwBool Backwards = FALSE;
+RwBool StrafeLeft = FALSE;
+RwBool StrafeRight = FALSE;
+
+RwReal CameraPitchRate = 0.0f;
+RwReal CameraTurnRate = 0.0f;
+RwReal CameraSpeed = 0.0f;
+RwReal CameraStrafeSpeed = 0.0f;
+
+RwBool spin = FALSE;
+
+RwBool CameraUpdate(RwReal deltaTime)
+{
+	if (CameraSpeed != 0.0f ||
+		CameraPitchRate != 0.0f ||
+		CameraTurnRate != 0.0f ||
+		CameraStrafeSpeed != 0.0f)
+	{
+		RwFrame* frame = RwCameraGetFrame(*Camera);
+		RwMatrix* m = RwFrameGetMatrix(frame);
+		RwV3d* right = RwMatrixGetRight(m);
+		RwV3d yAxis = { 0.0f, 1.0f, 0.0f };
+		RwV3d pos, invPos;
+
+		pos = *RwMatrixGetPos(m);
+
+		RwV3dNegate(&invPos, &pos);
+		RwFrameTranslate(frame, &invPos, 2);
+
+		RwFrameRotate(frame, right, CameraPitchRate * deltaTime,
+			2);
+		RwFrameRotate(frame, &yAxis, CameraTurnRate * deltaTime,
+			2);
+	
+		RwV3dIncrementScaled(&pos, RwMatrixGetAt(m),
+			(CameraSpeed * 0.2f) * deltaTime);
+		RwV3dIncrementScaled(&pos, RwMatrixGetRight(m),
+			(CameraStrafeSpeed * 0.3f) * deltaTime);
+
+		RwFrameTranslate(frame, &pos, 2);
+	}
+
+	return TRUE;
+}
+
+void CameraLook(RwReal turn, RwReal tilt)
+{
+	RwFrame* cameraFrame;
+	RwV3d delta, pos, * right;
+
+	static RwReal totalTilt = 0.0f;
+	static RwV3d Yaxis = { 0.0f, 1.0f, 0.0f };
+
+	if (totalTilt + tilt > 89.0f)
+	{
+		tilt = 89.0f - totalTilt;
+
+	}
+	else if (totalTilt + tilt < -89.0f)
+	{
+		tilt = -89.0f - totalTilt;
+	}
+
+	totalTilt += tilt;
+
+	cameraFrame = RwCameraGetFrame(*Camera);
+
+	pos = *RwMatrixGetPos(RwFrameGetMatrix(cameraFrame));
+
+	RwV3dScale(&delta, &pos, -1.0f);
+	RwFrameTranslate(cameraFrame, &delta, 2);
+
+	right = RwMatrixGetRight(RwFrameGetMatrix(cameraFrame));
+	RwFrameRotate(cameraFrame, right, tilt, 2);
+	RwFrameRotate(cameraFrame, &Yaxis, -turn, 2);
+
+	RwFrameTranslate(cameraFrame, &pos, 2);
+}
 
 RwBool Initialize3D(void *param)
 {
@@ -31,6 +118,18 @@ RwBool Initialize3D(void *param)
 		return FALSE;
 	}
 
+	RwChar* path = NULL;
+	path = RsPathnameCreate("levelk/track/track.txd");
+
+	if (!sub_41ADF0(path))
+	{
+		Log("no texture dictionary found");
+
+		return FALSE;
+	}
+
+	RsPathnameDestroy(path);
+
 	*World = LoadWorld("levelk/track.bsp");
 	if (World == NULL)
 	{
@@ -38,6 +137,8 @@ RwBool Initialize3D(void *param)
 
 		return FALSE;
 	}
+
+	*FarClipPlane = 1000.0f;
 
 	*Camera = CreateCamera();
 	if (Camera == NULL)
@@ -58,16 +159,167 @@ RwBool Initialize3D(void *param)
 	return TRUE;
 }
 
+RsEventStatus HandleKeyDown(RsKeyStatus* keyStatus)
+{
+	switch (keyStatus->keyCharCode)
+	{
+	case rsUP:
+	{
+		CameraSpeed = CAMERASPEED;
+		Forwards = TRUE;
+
+		return rsEVENTPROCESSED;
+	}
+
+	case rsDOWN:
+	{
+		CameraSpeed = -CAMERASPEED;
+		Backwards = TRUE;
+
+		return rsEVENTPROCESSED;
+	}
+
+	case rsLEFT:
+	{
+		CameraStrafeSpeed = CAMERASPEED;
+		StrafeLeft = TRUE;
+		return rsEVENTPROCESSED;
+	}
+
+	case rsRIGHT:
+	{
+		CameraStrafeSpeed = -CAMERASPEED;
+		StrafeRight = TRUE;
+		return rsEVENTPROCESSED;
+	}
+
+	default:
+	{
+		return rsEVENTNOTPROCESSED;
+	}
+	}
+}
+
+RsEventStatus HandleKeyUp(RsKeyStatus* keyStatus)
+{
+	switch (keyStatus->keyCharCode)
+	{
+	case rsUP:
+	{
+		Forwards = FALSE;
+		CameraSpeed = Backwards ? -CAMERASPEED : 0.0f;
+
+		return rsEVENTPROCESSED;
+	}
+
+	case rsDOWN:
+	{
+		Backwards = FALSE;
+		CameraSpeed = Forwards ? CAMERASPEED : 0.0f;
+
+		return rsEVENTPROCESSED;
+	}
+
+	case rsLEFT:
+	{
+		StrafeLeft = FALSE;
+		CameraStrafeSpeed = StrafeRight ? -CAMERASPEED : 0.0f;
+		return rsEVENTPROCESSED;
+	}
+
+	case rsRIGHT:
+	{
+		StrafeRight = FALSE;
+		CameraStrafeSpeed = StrafeLeft ? CAMERASPEED : 0.0f;
+		
+		return rsEVENTPROCESSED;
+	}
+
+
+	default:
+	{
+		return rsEVENTNOTPROCESSED;
+	}
+	}
+}
+
 RsEventStatus KeyboardHandler(RsEvent event, void *param)
 {
-	Log("KeyboardHandler %d", event);
+	//Log("KeyboardHandler %d", event);
+
+	switch (event)
+    {
+        case rsKEYDOWN:
+            {
+                return HandleKeyDown((RsKeyStatus *) param);
+            }
+
+        case rsKEYUP:
+            {
+                return HandleKeyUp((RsKeyStatus *) param);
+            }
+
+        default:
+            {
+                return rsEVENTNOTPROCESSED;
+            }
+    }
 
 	return rsEVENTNOTPROCESSED;
 }
 
+extern RsGlobalType& RsGlobal;
+
+RsEventStatus HandleMouseMove(RsMouseStatus* mouseStatus)
+{
+	if (spin)
+	{
+		CameraLook(mouseStatus->delta.x, mouseStatus->delta.y);
+	}
+
+	return rsEVENTPROCESSED;
+}
+
+RsEventStatus HandleLeftButtonDown(RsMouseStatus* mouseStatus)
+{
+	spin = TRUE;
+
+	return rsEVENTPROCESSED;
+}
+
+RsEventStatus HandleLeftButtonUp(RsMouseStatus* mouseStatus)
+{
+	spin = FALSE;
+
+	return rsEVENTPROCESSED;
+}
+
 RsEventStatus MouseHandler(RsEvent event, void *param)
 {
-	Log("MouseHandler %d", event);
+	//Log("MouseHandler %d", event);
+
+	switch (event)
+	{
+	case rsLEFTBUTTONDOWN:
+	{
+		return HandleLeftButtonDown((RsMouseStatus*)param);
+	}
+
+	case rsLEFTBUTTONUP:
+	{
+		return HandleLeftButtonUp((RsMouseStatus*)param);
+	}
+
+	case rsMOUSEMOVE:
+	{
+		return HandleMouseMove((RsMouseStatus*)param);
+	}
+
+	default:
+	{
+		return rsEVENTNOTPROCESSED;
+	}
+	}
 
 	return rsEVENTNOTPROCESSED;
 }
@@ -84,6 +336,38 @@ RwBool AttachInputDevices(void)
 void Idle()
 {
 	//((void (__cdecl*)())0x004194A0)(); // Idle()
+
+	RwUInt32 thisTime;
+	RwReal deltaTime;
+
+	static RwBool firstCall = TRUE;
+	static RwUInt32 lastFrameTime, lastAnimTime;
+
+	if (firstCall)
+	{
+		lastFrameTime = lastAnimTime = RsTimer();
+
+		firstCall = FALSE;
+	}
+
+	thisTime = RsTimer();
+
+	if (thisTime > (lastFrameTime + 1000))
+	{
+		FramesPerSecond = FrameCounter;
+
+		FrameCounter = 0;
+
+		lastFrameTime = thisTime;
+	}
+
+	deltaTime = (thisTime - lastAnimTime) * 0.001f;
+
+	CameraUpdate(deltaTime);
+
+	lastAnimTime = thisTime;
+
+	// Rendering part...
 
 	RwCameraClear(*Camera, &BackgroundColor, 3);
 
@@ -248,10 +532,51 @@ void RemoveLight(RpLight* light)
 	((void (__cdecl*)(RpLight*))0x0041A6C0)(light);
 }
 
+RwFrame* RwFrameTranslate(RwFrame* frame, const RwV3d* v, RwInt32 combine)
+{
+	return ((RwFrame * (__cdecl*)(RwFrame*, const RwV3d*, RwInt32))0x00454A20)(frame, v, combine);
+}
+
+RwFrame* RwFrameRotate(RwFrame* frame, const RwV3d* axis, RwReal angle, RwInt32 combine)
+{
+	return ((RwFrame * (__cdecl*)(RwFrame*, const RwV3d*, RwReal, RwInt32))0x00454AE0)(frame, axis, angle, combine);
+}
+
 RpWorld* LoadWorld(RwChar* bspFile)
 {
 	return ((RpWorld * (__cdecl*)(RwChar*))0x00402000)(bspFile);
 }
 
+RwInt32 winTranslateKey(WPARAM wParam, LPARAM lParam)
+{
+	return ((RwInt32 (__cdecl*)(WPARAM, LPARAM))0x00431A40)(wParam, lParam);
+}
 
+// Unused functions
 
+void RsMouseSetVisibility(RwBool visible)
+{
+	((void (__cdecl*)(RwBool))0x0041B2F0)(visible);
+}
+
+RwUInt32 RsTimer(void)
+{
+	return ((RwUInt32 (__cdecl*)())0x0041B1C0)();
+}
+
+RwChar* RsPathnameCreate(const RwChar* srcBuffer)
+{
+	return ((RwChar * (__cdecl*)(const RwChar*))0x0041B660)(srcBuffer);
+}
+
+void RsPathnameDestroy(RwChar* buffer)
+{
+	((void (__cdecl*)(RwChar*))0x0041B640)(buffer);
+}
+
+// Testing
+
+int sub_41ADF0(RwChar* dictName) // Applies texture to BSDs. somehow.
+{
+	return ((int (__cdecl*)(RwChar*))0x0041ADF0)(dictName);
+}

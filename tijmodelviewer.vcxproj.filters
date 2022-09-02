@@ -4,9 +4,12 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="rwcore.cpp" />
+    <ClCompile Include="input.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rwcore.h" />
     <ClInclude Include="utils.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="input.h" />
   </ItemGroup>
 </Project>
