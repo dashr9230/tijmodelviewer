@@ -1,12 +1,6 @@
 
 #include "main.h"
 
-#define MAXCAMERASPEED 200.0f
-#define MAXCAMERAROTSPEED 120.0f
-
-#define CAMERASPEED (0.5f*MAXCAMERASPEED)
-#define CAMERAROTSCL  (0.1f*MAXCAMERAROTSPEED)
-
 RwRGBA ForegroundColor = { 200, 200, 200, 255 };
 RwRGBA BackgroundColor = { 64,  64,  64,   0 };
 
@@ -21,17 +15,12 @@ RpLight** AmbientLight = (RpLight**)0x00504050;
 RwInt32 FrameCounter = 0;
 RwInt32 FramesPerSecond = 0;
 
-RwBool Forwards = FALSE;
-RwBool Backwards = FALSE;
-RwBool StrafeLeft = FALSE;
-RwBool StrafeRight = FALSE;
+extern RwReal CameraPitchRate;
+extern RwReal CameraTurnRate;
+extern RwReal CameraSpeed;
+extern RwReal CameraStrafeSpeed;
 
-RwReal CameraPitchRate = 0.0f;
-RwReal CameraTurnRate = 0.0f;
-RwReal CameraSpeed = 0.0f;
-RwReal CameraStrafeSpeed = 0.0f;
-
-RwBool spin = FALSE;
+extern RwBool boost;
 
 RwBool CameraUpdate(RwReal deltaTime)
 {
@@ -155,180 +144,6 @@ RwBool Initialize3D(void *param)
 		Log("Failed to create main or ambient light.");
 		return FALSE;
 	}
-
-	return TRUE;
-}
-
-RsEventStatus HandleKeyDown(RsKeyStatus* keyStatus)
-{
-	switch (keyStatus->keyCharCode)
-	{
-	case rsUP:
-	{
-		CameraSpeed = CAMERASPEED;
-		Forwards = TRUE;
-
-		return rsEVENTPROCESSED;
-	}
-
-	case rsDOWN:
-	{
-		CameraSpeed = -CAMERASPEED;
-		Backwards = TRUE;
-
-		return rsEVENTPROCESSED;
-	}
-
-	case rsLEFT:
-	{
-		CameraStrafeSpeed = CAMERASPEED;
-		StrafeLeft = TRUE;
-		return rsEVENTPROCESSED;
-	}
-
-	case rsRIGHT:
-	{
-		CameraStrafeSpeed = -CAMERASPEED;
-		StrafeRight = TRUE;
-		return rsEVENTPROCESSED;
-	}
-
-	default:
-	{
-		return rsEVENTNOTPROCESSED;
-	}
-	}
-}
-
-RsEventStatus HandleKeyUp(RsKeyStatus* keyStatus)
-{
-	switch (keyStatus->keyCharCode)
-	{
-	case rsUP:
-	{
-		Forwards = FALSE;
-		CameraSpeed = Backwards ? -CAMERASPEED : 0.0f;
-
-		return rsEVENTPROCESSED;
-	}
-
-	case rsDOWN:
-	{
-		Backwards = FALSE;
-		CameraSpeed = Forwards ? CAMERASPEED : 0.0f;
-
-		return rsEVENTPROCESSED;
-	}
-
-	case rsLEFT:
-	{
-		StrafeLeft = FALSE;
-		CameraStrafeSpeed = StrafeRight ? -CAMERASPEED : 0.0f;
-		return rsEVENTPROCESSED;
-	}
-
-	case rsRIGHT:
-	{
-		StrafeRight = FALSE;
-		CameraStrafeSpeed = StrafeLeft ? CAMERASPEED : 0.0f;
-		
-		return rsEVENTPROCESSED;
-	}
-
-
-	default:
-	{
-		return rsEVENTNOTPROCESSED;
-	}
-	}
-}
-
-RsEventStatus KeyboardHandler(RsEvent event, void *param)
-{
-	//Log("KeyboardHandler %d", event);
-
-	switch (event)
-    {
-        case rsKEYDOWN:
-            {
-                return HandleKeyDown((RsKeyStatus *) param);
-            }
-
-        case rsKEYUP:
-            {
-                return HandleKeyUp((RsKeyStatus *) param);
-            }
-
-        default:
-            {
-                return rsEVENTNOTPROCESSED;
-            }
-    }
-
-	return rsEVENTNOTPROCESSED;
-}
-
-extern RsGlobalType& RsGlobal;
-
-RsEventStatus HandleMouseMove(RsMouseStatus* mouseStatus)
-{
-	if (spin)
-	{
-		CameraLook(mouseStatus->delta.x, mouseStatus->delta.y);
-	}
-
-	return rsEVENTPROCESSED;
-}
-
-RsEventStatus HandleLeftButtonDown(RsMouseStatus* mouseStatus)
-{
-	spin = TRUE;
-
-	return rsEVENTPROCESSED;
-}
-
-RsEventStatus HandleLeftButtonUp(RsMouseStatus* mouseStatus)
-{
-	spin = FALSE;
-
-	return rsEVENTPROCESSED;
-}
-
-RsEventStatus MouseHandler(RsEvent event, void *param)
-{
-	//Log("MouseHandler %d", event);
-
-	switch (event)
-	{
-	case rsLEFTBUTTONDOWN:
-	{
-		return HandleLeftButtonDown((RsMouseStatus*)param);
-	}
-
-	case rsLEFTBUTTONUP:
-	{
-		return HandleLeftButtonUp((RsMouseStatus*)param);
-	}
-
-	case rsMOUSEMOVE:
-	{
-		return HandleMouseMove((RsMouseStatus*)param);
-	}
-
-	default:
-	{
-		return rsEVENTNOTPROCESSED;
-	}
-	}
-
-	return rsEVENTNOTPROCESSED;
-}
-
-RwBool AttachInputDevices(void)
-{
-	RsInputDeviceAttach(rsKEYBOARD, KeyboardHandler);
-
-	RsInputDeviceAttach(rsMOUSE, MouseHandler);
 
 	return TRUE;
 }
@@ -552,11 +367,15 @@ RwInt32 winTranslateKey(WPARAM wParam, LPARAM lParam)
 	return ((RwInt32 (__cdecl*)(WPARAM, LPARAM))0x00431A40)(wParam, lParam);
 }
 
-// Unused functions
-
-void RsMouseSetVisibility(RwBool visible)
+RsEventStatus RsKeyboardEventHandler(RsEvent event, void* param)
 {
-	((void (__cdecl*)(RwBool))0x0041B2F0)(visible);
+	return ((RsEventStatus (__cdecl*)(RsEvent, void*))0x0041B3B0)(event, param);
+}
+
+RsEventStatus RsMouseEventHandler(RsEvent event, void* param)
+{
+
+	return ((RsEventStatus (__cdecl*)(RsEvent, void*))0x0041B3E0)(event, param);
 }
 
 RwUInt32 RsTimer(void)
@@ -572,6 +391,13 @@ RwChar* RsPathnameCreate(const RwChar* srcBuffer)
 void RsPathnameDestroy(RwChar* buffer)
 {
 	((void (__cdecl*)(RwChar*))0x0041B640)(buffer);
+}
+
+// Unused functions
+
+void RsMouseSetVisibility(RwBool visible)
+{
+	((void (__cdecl*)(RwBool))0x0041B2F0)(visible);
 }
 
 // Testing

@@ -363,11 +363,19 @@ RpWorld* LoadWorld(RwChar* bspFile);
 
 RwInt32 winTranslateKey(WPARAM wParam, LPARAM lParam);
 
-// Unused
-void RsMouseSetVisibility(RwBool visible);
+RwBool CameraUpdate(RwReal deltaTime);
+void CameraLook(RwReal turn, RwReal tilt);
+
+RsEventStatus RsKeyboardEventHandler(RsEvent event, void* param);
+RsEventStatus RsMouseEventHandler(RsEvent event, void* param);
+
 RwUInt32 RsTimer(void);
+
 RwChar* RsPathnameCreate(const RwChar* srcBuffer);
 void RsPathnameDestroy(RwChar* buffer);
+
+// Unused
+void RsMouseSetVisibility(RwBool visible);
 
 // Testing
 
